@@ -1,19 +1,3 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "fastparquet==2024.11.0",
-#     "marimo",
-#     "pandas==2.3.3",
-#     "pyarrow==22.0.0",
-#     "pyoso==0.6.6",
-#     "python-dotenv==1.2.1",
-# ]
-# ///
-
-import marimo
-
-__generated_with = "0.17.7"
-app = marimo.App(width="medium")
 
 
 @app.cell
