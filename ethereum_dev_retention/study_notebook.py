@@ -1,8 +1,10 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "fastparquet==2024.11.0",
 #     "marimo",
 #     "pandas==2.3.3",
+#     "pyarrow==22.0.0",
 #     "pyoso==0.6.6",
 #     "python-dotenv==1.2.1",
 # ]
@@ -37,6 +39,14 @@ def _(os, pyoso):
 def _(pyoso):
     pyoso_db_conn = pyoso.Client().dbapi_connection()
     return (pyoso_db_conn,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # Exploring the tables and queries
+    """)
+    return
 
 
 @app.cell
@@ -372,63 +382,6 @@ def _(eth_label_values):
     return
 
 
-@app.cell
-def _(pd, pyoso_db_conn):
-
-    esp_users_event_classification_sql = """
-      with ethreum_repos_labels as (
-      SELECT
-      distinct( ecosystem_name)
-      from int_opendevdata_ecosystem_repos 
-      where lower(ecosystem_name) like '%ethereum%'
-      ), 
-
-      cohort_label as (
-         SELECT 
-        github_handle,
-        created_at,
-        FIRST_VALUE(DATE_TRUNC('month', CAST(created_at AS DATE))) OVER (
-            PARTITION BY github_handle 
-            ORDER BY CAST(created_at AS DATE)
-        ) AS first_cohort
-    FROM int_sre_github_users
-
-      )
-
-
-    ,_filter as (
-      SELECT
-          events.*, 
-          repos.ecosystem_name, 
-          case when repos.ecosystem_name in (
-          select ecosystem_name from ethreum_repos_labels)  then 'Ethereum' else 'Unknown' end as ecosystem_label,
-          cohort_label.first_cohort
-
-      FROM int_sre_github_events_by_user as events
-      left join int_opendevdata_ecosystem_repos as repos
-      on events.github_repo_id = repos.repo_id
-      left join cohort_label  
-      ON events.user_name = cohort_label.github_handle
-     )
-
-     select * from _filter 
-     where ecosystem_label !='Unknown' 
-     and first_cohort not null
-    limit 100 
-      """
-    esp_users_event_classification = pd.read_sql(esp_users_event_classification_sql, pyoso_db_conn)
-
-    # esp_users_event_classification.to_parquet()
-
-    return (esp_users_event_classification,)
-
-
-@app.cell
-def _(esp_users_event_classification):
-    esp_users_event_classification
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -490,6 +443,194 @@ def _():
 
 
 
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # Analysis data model
+    """)
+    return
+
+
+@app.cell
+def _():
+
+    # esp_users_event_classification_sql = """
+    #   with ethreum_repos_labels as (
+    #   SELECT
+    #   distinct( ecosystem_name)
+    #   from int_opendevdata_ecosystem_repos 
+    #   where ecosystem_name in  ('Ethereum', 'Solana')
+    #   ), 
+
+    #   cohort_label as (
+    #      SELECT 
+    #         github_handle,
+    #         created_at,
+    #         FIRST_VALUE(DATE_TRUNC('week', CAST(created_at AS DATE))) OVER (
+    #             PARTITION BY github_handle 
+    #             ORDER BY CAST(created_at AS DATE)
+    #         ) AS first_cohort_week_date,
+    #         CONCAT(
+    #             CAST(YEAR(FIRST_VALUE(DATE_TRUNC('week', CAST(created_at AS DATE))) OVER (
+    #                 PARTITION BY github_handle 
+    #                 ORDER BY CAST(created_at AS DATE)
+    #             )) AS VARCHAR),
+    #             '-W',
+    #             LPAD(CAST(WEEK(FIRST_VALUE(DATE_TRUNC('week', CAST(created_at AS DATE))) OVER (
+    #                 PARTITION BY github_handle 
+    #                 ORDER BY CAST(created_at AS DATE)
+    #             )) AS VARCHAR), 2, '0')
+    #         ) AS cohort_year_week_label
+    #     FROM int_sre_github_users
+    #   )
+
+    # ,_filter as (
+    #   SELECT
+    #       events.*, 
+    #       repos.ecosystem_name, 
+    #       case 
+    #         when repos.ecosystem_name = 'Ethereum' then 'Ethereum'
+    #         when repos.ecosystem_name = 'Solana' then 'Solana'
+    #         else 'Unknown'
+    #       end as ecosystem_label,
+    #       cohort_label.first_cohort_week_date,
+    #       cohort_label.cohort_year_week_label,
+    #       CONCAT(
+    #           CAST(YEAR(DATE_TRUNC('week', CAST(events.event_time AS DATE))) AS VARCHAR),
+    #           '-W',
+    #           LPAD(CAST(WEEK(DATE_TRUNC('week', CAST(events.event_time AS DATE))) AS VARCHAR), 2, '0')
+    #       ) AS event_year_week_label
+
+    #   FROM int_sre_github_events_by_user as events
+    #   left join int_opendevdata_ecosystem_repos as repos
+    #   on events.github_repo_id = repos.repo_id
+    #   left join cohort_label  
+    #   ON events.user_name = cohort_label.github_handle
+    #  )
+
+    #  select * from _filter 
+    #  where 
+    #  -- ecosystem_label = 'Ethereum'
+    #  -- and 
+    #  first_cohort_week_date is not null
+    #   """
+    # esp_users_event_classification = pd.read_sql(esp_users_event_classification_sql, pyoso_db_conn)
+    # esp_users_event_classification.user_name.nunique() , 
+    # esp_users_event_classification.github_user_id.nunique()
+
+    # # esp_users_event_classification.to_parquet('data/esp_users_event_classification.parquet')
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    def _():
+        esp_users_event_classification.to_parquet('data/esp_users_event_classification.parquet', engine='fastparquet')
+        return
+
+
+    _()
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification.columns
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification[['user_name', 'github_user_id']].nunique() 
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification[esp_users_event_classification.ecosystem_name == "Ethereum"].github_user_id.nunique()
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    _user_cohort = esp_users_event_classification.groupby('first_cohort_week_date')['user_name'].nunique()
+    _user_cohort
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification.user_name.nunique()
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification.first_cohort_week_date.nunique()
+    return
+
+
+@app.cell
+def _(esp_users_event_classification):
+    esp_users_event_classification
+    return
+
+
+@app.cell
+def _(esp_users_event_classification, pd):
+    # Create month and year columns from first_cohort_week_date
+    df = esp_users_event_classification.copy()
+    df['first_cohort_week_date'] = pd.to_datetime(df['first_cohort_week_date'])
+    df['cohort_year_month'] = df['first_cohort_week_date'].dt.to_period('M').astype(str)
+    df['cohort_year'] = df['first_cohort_week_date'].dt.year
+    return (df,)
+
+
+@app.cell
+def _(df):
+    # Unique users by cohort month
+    users_by_month = df.groupby('cohort_year_month')['user_name'].nunique().reset_index()
+    users_by_month.columns = ['cohort_year_month', 'unique_users']
+    users_by_month.unique_users.describe()
+    return
+
+
+@app.cell
+def _(df):
+    # Unique users by cohort year
+    users_by_year = df.groupby('cohort_year')['user_name'].nunique().reset_index()
+    users_by_year.columns = ['cohort_year', 'unique_users']
+    users_by_year
+    return
+
+
+@app.cell
+def _(pd, pyoso_db_conn):
+
+    _sre_users_sql = """
+
+
+        SELECT 
+        github_handle,
+        created_at,
+        FIRST_VALUE(DATE_TRUNC('week', CAST(created_at AS DATE))) OVER (
+            PARTITION BY github_handle 
+            ORDER BY CAST(created_at AS DATE)
+        ) AS first_cohort
+    FROM int_sre_github_users
+
+
+    """
+    sre_users = pd.read_sql(_sre_users_sql, pyoso_db_conn)
+    sre_users.github_handle.nunique(), sre_users.first_cohort.isna().sum()
+    return (sre_users,)
+
+
+@app.cell
+def _():
     return
 
 
